@@ -1,0 +1,110 @@
+Select *
+from PorfolioProject..CovidDeaths
+order by 3, 4
+
+--Select *
+--from PorfolioProject..CovidVaccinations
+--order by 3, 4
+
+--Select data that we are going to uses
+Select Location, date, total_cases, new_cases, total_deaths, population
+from PorfolioProject..CovidDeaths
+order by 1, 2
+
+--Looking at Total Cases vs Total Deaths
+-- Shows likelihood of dying if you contract Covid in your country
+Select Location, date, total_cases, total_deaths, (total_deaths / total_cases)*100 as DeathPercentage
+from PorfolioProject..CovidDeaths
+where location like '%vie%'
+order by 1, 2
+
+--Looking at Total cases vs population
+--Show percentage of population got Covid
+Select Location, date, total_cases, population, (total_cases/population)*100 as CovidInfectedPercentage
+from PorfolioProject..CovidDeaths
+where location like '%vie%'
+order by 1, 2
+
+--Looking at countries with highest infection rate compared to population
+Select Location, population, MAX(total_cases) as HighestInfection, MAX((total_cases/population))*100 as InfectionRatePercentage
+from PorfolioProject..CovidDeaths
+group by location, population
+order by InfectionRatePercentage desc
+
+-- Show contries with highest death count per population
+Select Location, MAX(cast(total_deaths as int)) as HighestDeathCount
+from PorfolioProject..CovidDeaths
+where continent is not null
+group by location
+order by HighestDeathCount desc
+
+-- Let's break things down by continent
+--Showing the continents with the highest death count per population
+Select continent, MAX(cast(total_deaths as int)) as HighestDeathCount
+from PorfolioProject..CovidDeaths
+where continent is not null
+group by continent
+order by HighestDeathCount desc
+
+-- Global numbers
+Select SUM(new_cases) as TotalCases, SUM(cast(new_deaths as int)) as TotalDeaths, SUM(cast(new_deaths as int)) / SUM(new_cases)*100 as DeathPercentage
+from PorfolioProject..CovidDeaths
+where continent is not null
+order by 1, 2
+
+select *
+from PorfolioProject..CovidVaccinations vac
+Join PorfolioProject..CovidDeaths dea
+on dea.location = vac.location
+and dea.date = vac.date
+
+--Looking at total population vs vaccination
+-- Use CTE
+
+With PopvsVac (Continent, location, date, population, new_vaccinations, RollingPeopleVaccinated)
+as (
+select dea.continent, dea.location , dea.date, dea.population, vac.new_vaccinations,
+SUM(convert(int, vac.new_vaccinations)) over (partition by dea.location Order by dea.Location, dea.Date) as RollingPeopleVaccinated
+from PorfolioProject..CovidVaccinations vac
+Join PorfolioProject..CovidDeaths dea
+on dea.location = vac.location
+and dea.date = vac.date
+where dea.continent is not null
+)
+Select *, (RollingPeopleVaccinated/population)*100
+From PopvsVac
+
+--Temp Table
+Drop table if exists #PercentPopulationVaccinated
+Create table #PercentPopulationVaccinated
+(
+Continent nvarchar(255),
+Location nvarchar(255),
+Date	datetime,
+Population	numeric,
+New_vaccinations numeric,
+RollingPeopleVaccinated numeric
+)
+insert into #PercentPopulationVaccinated
+select dea.continent, dea.location , dea.date, dea.population, vac.new_vaccinations,
+SUM(convert(int, vac.new_vaccinations)) over (partition by dea.location Order by dea.Location, dea.Date) as RollingPeopleVaccinated
+from PorfolioProject..CovidVaccinations vac
+Join PorfolioProject..CovidDeaths dea
+on dea.location = vac.location
+and dea.date = vac.date
+
+Select *, (RollingPeopleVaccinated/Population)*100
+from #PercentPopulationVaccinated
+
+--Creating view to store data for later visualizations
+Create view PercentPopulationVaccinated as 
+select dea.continent, dea.location , dea.date, dea.population, vac.new_vaccinations,
+SUM(convert(int, vac.new_vaccinations)) over (partition by dea.location Order by dea.Location, dea.Date) as RollingPeopleVaccinated
+from PorfolioProject..CovidVaccinations vac
+Join PorfolioProject..CovidDeaths dea
+on dea.location = vac.location
+and dea.date = vac.date
+where dea.continent is not null
+
+Select *
+from PercentPopulationVaccinated
